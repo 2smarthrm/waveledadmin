@@ -1,4 +1,31 @@
- 
+ /**
+  * 
+ este erro aparec ao tentamos dletar um produto no productstab:
+
+ Uncaught TypeError: Cannot read properties of undefined (reading 'backdrop')
+    at F_._initializeBackDrop (index-BTTxXWV1.js:81:32785)
+    at new F_ (index-BTTxXWV1.js:81:31708)
+    at F_.getOrCreateInstance (index-BTTxXWV1.js:81:7920)
+    at HTMLAnchorElement.<anonymous> (index-BTTxXWV1.js:81:35650)
+    at HTMLDocument.r (index-BTTxXWV1.js:81:3831)Understand this error
+index-BTTxXWV1.js:37 Uncaught TypeError: m is not a function
+    at onClick (index-BTTxXWV1.js:118:4619)
+    at w (index-BTTxXWV1.js:68:5436)
+    at Object.qb (index-BTTxXWV1.js:37:9855)
+    at Jb (index-BTTxXWV1.js:37:10009)
+    at Zb (index-BTTxXWV1.js:37:10066)
+    at Ev (index-BTTxXWV1.js:37:31446)
+    at Px (index-BTTxXWV1.js:37:31863)
+    at index-BTTxXWV1.js:37:36776
+    at bm (index-BTTxXWV1.js:40:36935)
+    at rx (index-BTTxXWV1.js:37:8991)Understand this error
+
+
+
+  * 
+  */
+
+
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import axiosLib from 'axios';
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -51,6 +78,7 @@ import {
 } from 'react-icons/fi';
 import { FaRegHeart } from 'react-icons/fa6';
 import { TbCategory2 } from "react-icons/tb";
+import { Dropdown as RBDropdown, ButtonGroup } from 'react-bootstrap';
 
 // === TABELA / DROPDOWN REUTILIZÁVEIS ===
 import Table from '@/components/shared/table/Table';
@@ -271,19 +299,32 @@ function ImagesPreviewGrid({ files, onRemove }) {
 }
 
 /* --------------------------------- PRODUTOS ------------------------------- */
+
+// usar react-hot-toast aqui para erros e sucess e devolver code:
+// precisa disto no topo do ficheiro:
+// import { toast, Toaster } from 'react-hot-toast';
+
 function ProductsTab() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const apiError = (e, fallback = 'Ocorreu um erro.') =>
+    e?.response?.data?.error || e?.message || fallback;
+
   const fetchList = async () => {
-    setLoading(true);
-    const res = await axios.get('/api/products', {
-      params: { q: query || undefined, category: category || undefined },
-    });
-    setItems(res.data.data || []);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const res = await axios.get('/api/products', {
+        params: { q: query || undefined, category: category || undefined },
+      });
+      setItems(res.data.data || []);
+    } catch (e) {
+      toast.error(apiError(e, 'Falha ao carregar a lista de produtos.'));
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => { fetchList(); }, []);
 
@@ -307,7 +348,16 @@ function ProductsTab() {
     const fd = new FormData();
     Object.entries(form).forEach(([k, v]) => v !== '' && fd.append(k, v));
     for (const f of files) fd.append('images', f);
-    await axios.post('/api/products', fd /* sem headers: deixa o browser definir */);
+
+    await toast.promise(
+      axios.post('/api/products', fd /* deixa o browser definir headers */),
+      {
+        loading: 'A criar produto…',
+        success: 'Produto criado com sucesso!',
+        error: (e) => apiError(e, 'Falha ao criar produto.'),
+      }
+    );
+
     setShowCreate(false);
     setForm({ name: '', category: '', specs_text: '', description_html: '', datasheet_url: '', manual_url: '', sku: '' });
     setFiles([]);
@@ -357,7 +407,16 @@ function ProductsTab() {
     const fd = new FormData();
     Object.entries(editForm).forEach(([k, v]) => v !== '' && fd.append(k, v));
     for (const f of editFiles) fd.append('images', f); // backend concatena
-    await axios.put(`/api/products/${editId}`, fd /* sem headers: deixa o browser definir */);
+
+    await toast.promise(
+      axios.put(`/api/products/${editId}`, fd),
+      {
+        loading: 'A atualizar…',
+        success: 'Produto atualizado!',
+        error: (e) => apiError(e, 'Falha ao atualizar produto.'),
+      }
+    );
+
     setShowEdit(false);
     fetchList();
   };
@@ -369,36 +428,54 @@ function ProductsTab() {
     setRemoveErr('');
     setRemovingIdx(idx);
     try {
-      // usa querystring "src" (o backend aceita src OU index)
-      await axios.delete(`/api/products/${editId}/images`, {
-        params: { src }, // poderia ser { index: idx } se preferires
-      });
-      // atualiza a lista localmente
+      await toast.promise(
+        axios.delete(`/api/products/${editId}/images`, { params: { src } }),
+        {
+          loading: 'A remover imagem…',
+          success: 'Imagem removida.',
+          error: (e) => apiError(e, 'Falha ao remover a imagem.'),
+        }
+      );
       setExistingImgs((prev) => prev.filter((_, i) => i !== idx));
     } catch (e) {
-      setRemoveErr(e?.response?.data?.error || e.message || 'Falha ao remover a imagem');
+      setRemoveErr(apiError(e, 'Falha ao remover a imagem.'));
     } finally {
       setRemovingIdx(null);
     }
   };
 
-  // LIKE / UNLIKE
+  // LIKE / UNLIKE (com toasts)
   const like = async (id) => {
-    const r = await axios.post(`/api/products/${id}/like`);
-    setItems((prev) => prev.map((p) => (p._id === id ? { ...p, wl_likes: r.data.data.likes } : p)));
+    try {
+      const r = await toast.promise(
+        axios.post(`/api/products/${id}/like`),
+        { loading: 'A gostar…', success: 'Obrigado pelo like!', error: (e) => apiError(e, 'Não foi possível registar o like.') }
+      );
+      setItems((prev) => prev.map((p) => (p._id === id ? { ...p, wl_likes: r.data.data.likes } : p)));
+    } catch {}
   };
+
   const unlike = async (id) => {
-    const r = await axios.post(`/api/products/${id}/unlike`);
-    setItems((prev) => prev.map((p) => (p._id === id ? { ...p, wl_likes: r.data.data.likes } : p)));
+    try {
+      const r = await toast.promise(
+        axios.post(`/api/products/${id}/unlike`),
+        { loading: 'A remover like…', success: 'Like removido.', error: (e) => apiError(e, 'Não foi possível remover o like.') }
+      );
+      setItems((prev) => prev.map((p) => (p._id === id ? { ...p, wl_likes: r.data.data.likes } : p)));
+    } catch {}
   };
 
   // DELETE (com confirmação)
   const [confirm, setConfirm] = useState({ show: false, id: '', loading: false });
   const askDelete = (id) => setConfirm({ show: true, id, loading: false });
+
   const doDelete = async () => {
+    setConfirm((c) => ({ ...c, loading: true }));
     try {
-      setConfirm((c) => ({ ...c, loading: true }));
-      await axios.delete(`/api/products/${confirm.id}`);
+      await toast.promise(
+        axios.delete(`/api/products/${confirm.id}`),
+        { loading: 'A eliminar…', success: 'Produto eliminado.', error: (e) => apiError(e, 'Não foi possível eliminar o produto.') }
+      );
       setConfirm({ show: false, id: '', loading: false });
       fetchList();
     } catch {
@@ -444,24 +521,50 @@ function ProductsTab() {
           );
         },
       },
-      {
+      { 
         accessorKey: 'actions',
         header: () => 'Ações',
         cell: ({ row }) => (
-          <div className="hstack gap-2 justify-content-end">
-            <Link to={`/products/${row.original._id}`} className="avatar-text avatar-md" title="Ver"><FiEye /></Link>
-            <Button variant="outline-primary" size="sm" onClick={() => openEdit(row)} title="Editar"><FiEdit3 /></Button>
-            <Dropdown
-              dropdownItems={[
-                { label: 'Eliminar', icon: <FiTrash2 />, onClick: () => askDelete(row.original._id) },
-              ]}
-              triggerIcon={<FiMoreHorizontal />}
-              triggerClass="avatar-md"
-              triggerPosition={'0,21'}
-            />
+          <div className="d-flex gap-2 justify-content-end">
+            <Link
+              to={`/products/${row.original._id}`}
+              className="avatar-text avatar-md"
+              title="Ver"
+            >
+              <FiEye />
+            </Link>
+
+            <Button
+              variant="outline-primary"
+              size="sm"
+              onClick={() => openEdit(row)}
+              title="Editar"
+            >
+              <FiEdit3 />
+            </Button>
+
+            <RBDropdown as={ButtonGroup} align="end">
+              <Button variant="outline-secondary" size="sm">
+                <FiMoreHorizontal />
+              </Button>
+              <RBDropdown.Toggle
+                split
+                variant="outline-secondary"
+                id={`actions-${row.original._id}`}
+              />
+              <RBDropdown.Menu>
+                <RBDropdown.Item
+                  className="text-danger"
+                  onClick={() => askDelete(row.original._id)}
+                >
+                  <FiTrash2 className="me-2" />
+                  Eliminar
+                </RBDropdown.Item>
+              </RBDropdown.Menu>
+            </RBDropdown>
           </div>
         ),
-        meta: { headerClassName: 'text-end' },
+        meta: { headerClassName: 'text-end' }, 
       },
     ],
     []
@@ -469,10 +572,11 @@ function ProductsTab() {
 
   return (
     <div>
+      <Toaster position="top-right" />
+
       {/* Filtros */}
       <div className="d-flex flex-wrap gap-3 align-items-end mb-3">
-        <div style={{ minWidth: 260, flex: 1 }}> 
-        </div> 
+        <div style={{ minWidth: 260, flex: 1 }} />
         <Button className="ms-auto" onClick={() => setShowCreate(true)}>
           <FiPlus className="me-1" /> Novo Produto
         </Button>
@@ -584,6 +688,7 @@ function ProductsTab() {
     </div>
   );
 }
+
 
 /* --------------------------- DESTAQUES HOME (4) --------------------------- */
 function FeaturedHomeTab() {
