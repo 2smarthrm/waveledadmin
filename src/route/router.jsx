@@ -1,3 +1,5 @@
+ 
+
 import { createBrowserRouter, redirect } from "react-router-dom";
 import axios from "axios";
 
@@ -25,10 +27,11 @@ export const api = axios.create({
  
 async function checkAuth() {
   try { 
-    const res = await api.get("/api/auth/status", { 
-      params: { _ts: Date.now() },
-    });
-    return !!res?.data?.data?.authenticated;
+ 
+    const res = await api.get("/api/auth/status");
+     return !!res?.data?.data?.authenticated;
+
+
   } catch {
     return false;
   }
@@ -81,4 +84,5 @@ export const router = createBrowserRouter([
     loader: notFoundLoader,
   },
 ]);
+ 
  
