@@ -23,7 +23,7 @@ const LoginMinimal = () => {
     } catch (e) {
       console.error("onLoggedIn error:", e);
       // Fallback: vai para o domínio base
-      window.location.assign(getBaseUrl());
+     //  window.location.assign(getBaseUrl());
     }
   };
 
@@ -53,3 +53,4 @@ export default LoginMinimal
 
 
  
+
