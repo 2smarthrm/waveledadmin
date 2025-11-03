@@ -56,9 +56,11 @@ import Table from '@/components/shared/table/Table';
 import Dropdown from '@/components/shared/Dropdown';
 import { toast, Toaster } from 'react-hot-toast';
 
-const API_BASE = "http://localhost:4000";
+const isBrowser = typeof window !== "undefined";
+const protocol = isBrowser && window.location.protocol === "https:" ? "https" : "http";
+const API_BASE = protocol === "https"  ?  'https://waveledserver.vercel.app' : "http://localhost:4000";
 const axios = axiosLib.create({ baseURL: API_BASE, withCredentials: true });
-
+ 
 /* --------------------------------- HOOK ---------------------------------- */
 function useFetch(fn, deps = []) {
   const [data, setData] = useState(null);
