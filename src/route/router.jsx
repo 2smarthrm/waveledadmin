@@ -6,7 +6,9 @@ import Home from "../pages/home";
 import LayoutAuth from "../layout/layoutAuth";
 import LoginMinimal from "../pages/login-minimal";
 
-const API_BASE = "http://localhost:4000";
+const isBrowser = typeof window !== "undefined";
+const protocol = isBrowser && window.location.protocol === "https:" ? "https" : "http";
+const API_BASE = protocol === "https"  ?  'https://waveledserver.vercel.app' : "http://localhost:4000";
 
  
 export const api = axios.create({
@@ -17,7 +19,7 @@ export const api = axios.create({
     "X-Requested-With": "XMLHttpRequest",
     "Cache-Control": "no-cache",
     Pragma: "no-cache",
-  }, 
+  },  
 });
 
  
