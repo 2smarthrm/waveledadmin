@@ -1,7 +1,9 @@
 import React from "react";
 import axios from "axios";  
 import LoginForm from '@/components/authentication/LoginForm'
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+const isBrowser = typeof window !== "undefined";
+const protocol = isBrowser && window.location.protocol === "https:" ? "https" : "http";
+const API_BASE = protocol === "https"  ?  'https://waveledserver.vercel.app' : "http://localhost:4000";
 
 const LoginMinimal = () => {
 
@@ -45,6 +47,9 @@ const LoginMinimal = () => {
 }
 
 export default LoginMinimal
+
+
+ 
 
 
  
