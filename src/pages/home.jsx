@@ -50,6 +50,7 @@ import {
   FiFolderPlus,
 } from 'react-icons/fi';
 import { FaRegHeart } from 'react-icons/fa6';
+import { TbCategory2 } from "react-icons/tb";
 
 // === TABELA / DROPDOWN REUTILIZÁVEIS ===
 import Table from '@/components/shared/table/Table';
@@ -60,6 +61,7 @@ const isBrowser = typeof window !== "undefined";
 const protocol = isBrowser && window.location.protocol === "https:" ? "https" : "http";
 const API_BASE = protocol === "https"  ?  'https://waveledserver.vercel.app' : "http://localhost:4000";
 const axios = axiosLib.create({ baseURL: API_BASE, withCredentials: true });
+ 
  
 /* --------------------------------- HOOK ---------------------------------- */
 function useFetch(fn, deps = []) {
@@ -1554,74 +1556,7 @@ function CustomizationSection() {
 }
 
 /* -------------------------- Exemplares (galeria) --------------------------- */
-/* aplicar aqui a opçao de editaros exemlakers no proprio carad aoinves d eser um input normal vai ser textarea para descrição, ao clciar no boatapo edit no card oavaia aperere opçao d efarzr uplaod d anaova iamgem, e ediatar o tituloe. descuição no prorio card e um botaço d esalvar, fuulcode in same function
-usar este endepoint para editar :
-
-
-
-
-app.post('/api/upload', upload.single('file'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Ficheiro ausente' });
-  return res.json({ path: `/uploads/${req.file.filename}` });
-});
-
- 
-app.patch('/api/examples/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!isObjectId(id)) {
-      return res.status(400).json({ error: 'id inválido' });
-    }
-
-    // Campos permitidos para update
-    const allowed = ['title', 'description', 'image', 'categoryId', 'productId'];
-    const payload = {};
-    for (const k of allowed) {
-      if (k in req.body) payload[k] = req.body[k];
-    }
-
-    // nada a atualizar?
-    if (Object.keys(payload).length === 0) {
-      return res.status(400).json({ error: 'nenhum campo válido para atualização' });
-    }
-
-    // regra opcional: pelo menos um dos dois se ambos existirem no update
-    // (se quiseres obrigar a ter sempre um dos dois definidos no doc final)
-    if ('categoryId' in payload || 'productId' in payload) {
-      const nextCategory = ('categoryId' in payload) ? payload.categoryId : undefined;
-      const nextProduct  = ('productId'  in payload) ? payload.productId  : undefined;
-
-      // Se quiseres forçar que pelo menos um exista após update, busca doc atual
-      const current = await ExampleShowcase.findById(id).lean();
-      if (!current) return res.status(404).json({ error: 'registo não encontrado' });
-
-      const finalCategoryId = nextCategory !== undefined ? nextCategory : current.categoryId;
-      const finalProductId  = nextProduct  !== undefined ? nextProduct  : current.productId;
-
-      if (!finalCategoryId && !finalProductId) {
-        return res.status(400).json({ error: 'categoryId ou productId é obrigatório' });
-      }
-    }
-
-    const updated = await ExampleShowcase.findByIdAndUpdate(
-      id,
-      { $set: payload },
-      { new: true, runValidators: true }
-    ).lean();
-
-    if (!updated) {
-      return res.status(404).json({ error: 'registo não encontrado' });
-    }
-
-    res.json({ ok: true, data: updated });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-fazer isso e devolver fullcode da função examplestab
-
- */
+  
 
 function ExamplesTab({ categoryId, setCategoryId, productId, setProductId }) {
   const params = {};
@@ -3012,6 +2947,313 @@ const layoutStyles = `
   }
 `;
 
+
+/* ------------------------------- CATEGORY -------------------------------- */
+ function slugify(s = "") {
+  return String(s)
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
+}
+
+function CategoriesTab() {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // criação
+  const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState({ name: "", slug: "" });
+
+  // edição
+  const [showEdit, setShowEdit] = useState(false);
+  const [editId, setEditId] = useState("");
+  const [editForm, setEditForm] = useState({ name: "", slug: "" });
+
+  // apagar
+  const [confirm, setConfirm] = useState({ show: false, id: "", loading: false, msg: "" });
+
+  // reordenação local (bulk)
+  const [dirtyOrder, setDirtyOrder] = useState(false);
+
+  const fetchList = async () => {
+    setLoading(true);
+    try {
+      const r = await axios.get("/api/categories", { params: { _ts: Date.now() } });
+      setItems(r.data?.data || []);
+    } finally {
+      setLoading(false);
+      setDirtyOrder(false);
+    }
+  };
+
+  useEffect(() => { fetchList(); }, []);
+
+  // ===== CREATE =====
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    const payload = {
+      name: form.name.trim(),
+      slug: form.slug.trim() || slugify(form.name),
+    };
+    await axios.post("/api/categories", payload);
+    setShowCreate(false);
+    setForm({ name: "", slug: "" });
+    fetchList();
+  };
+
+  // ===== EDIT =====
+  const openEdit = (row) => {
+    const c = row;
+    setEditId(c._id);
+    setEditForm({ name: c.wl_name || "", slug: c.wl_slug || "" });
+    setShowEdit(true);
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    const payload = {};
+    if (editForm.name.trim()) payload.name = editForm.name.trim();
+    if (editForm.slug.trim()) payload.slug = editForm.slug.trim();
+    await axios.put(`/api/categories/${editId}`, payload);
+    setShowEdit(false);
+    fetchList();
+  };
+
+  // ===== DELETE =====
+  const askDelete = (id) => setConfirm({ show: true, id, loading: false, msg: "" });
+
+  const doDelete = async () => {
+    try {
+      setConfirm((c) => ({ ...c, loading: true, msg: "" }));
+      await axios.delete(`/api/categories/${confirm.id}`);
+      setConfirm({ show: false, id: "", loading: false, msg: "" });
+      fetchList();
+    } catch (e) {
+      const msg = e?.response?.data?.error || e.message || "Falha ao eliminar";
+      setConfirm((c) => ({ ...c, loading: false, msg }));
+    }
+  };
+
+  // ===== REORDER (↑/↓ imediato) =====
+  const stepReorder = async (id, direction) => {
+    await axios.patch(`/api/categories/${id}/reorder-step`, { direction });
+    fetchList();
+  };
+
+  // ===== REORDER (bulk local + guardar) =====
+  const moveLocal = (idx, dir) => {
+    const to = idx + (dir === "up" ? -1 : 1);
+    if (to < 0 || to >= items.length) return;
+    const next = [...items];
+    [next[idx], next[to]] = [next[to], next[idx]];
+    setItems(next);
+    setDirtyOrder(true);
+  };
+
+  const saveBulkOrder = async () => {
+    const orderedIds = items.map((c) => c._id);
+    await axios.post("/api/categories/reorder", { orderedIds });
+    setDirtyOrder(false);
+    fetchList();
+  };
+
+  // ===== UI =====
+  return (
+    <div className="container-fluid p-0">
+      <div className="d-flex flex-wrap gap-2 align-items-center mb-3">
+        <h4 className="m-0">Categorias</h4>
+        <div className="ms-auto d-flex gap-2">
+          {dirtyOrder && (
+            <button className="btn btn-primary" onClick={saveBulkOrder}>
+              Guardar ordem
+            </button>
+          )}
+          <button className="btn btn-success" onClick={() => setShowCreate(true)}>
+            + Nova Categoria
+          </button>
+          <button className="btn btn-outline-secondary" onClick={() => fetchList()}>
+            Recarregar
+          </button>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-body p-0">
+          {loading ? (
+            <div className="p-4 text-center">A carregar…</div>
+          ) : !items.length ? (
+            <div className="p-4 text-center text-muted">Sem categorias.</div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table align-middle mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th style={{ width: 72 }}>#</th>
+                    <th>Nome</th>
+                    <th>Slug</th>
+                    <th style={{ width: 280 }} className="text-end">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((c, i) => (
+                    <tr key={c._id}>
+                      <td className="text-muted">{i + 1}</td>
+                      <td className="fw-semibold">{c.wl_name}</td>
+                      <td><code>{c.wl_slug}</code></td>
+                      <td>
+                        <div className="d-flex gap-2 justify-content-end">
+                         
+                         
+                          {/* mover 1 passo no servidor */}
+                          <button
+                            className="btn btn-sm btn-outline-primary"
+                            title="↑ mover para cima"
+                            disabled={i === 0}
+                            onClick={() => stepReorder(c._id, "up")}
+                          >
+                            ↑  
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-primary"
+                            title="↓ mover para baixo"
+                            disabled={i === items.length - 1}
+                            onClick={() => stepReorder(c._id, "down")}
+                          >
+                            ↓  
+                          </button>
+
+                          <button
+                            className="btn btn-sm btn-outline-warning"
+                            onClick={() => openEdit(c)}
+                          >
+                            Editar
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => askDelete(c._id)}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {dirtyOrder && (
+                <div className="p-3 border-top d-flex justify-content-end gap-2">
+                  <button className="btn btn-light" onClick={() => fetchList()}>
+                    Cancelar alterações
+                  </button>
+                  <button className="btn btn-primary" onClick={saveBulkOrder}>
+                    Guardar ordem
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* MODAL: Criar (estilo do modal de “Novo Produto”) */}
+      <Modal show={showCreate} onHide={() => setShowCreate(false)} size="lg">
+        <Form onSubmit={handleCreate}>
+          <Modal.Header closeButton>
+            <Modal.Title>Nova Categoria</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Row className="g-3">
+              <Col md={6}>
+                <Form.Group>
+                  <Form.Label>Nome</Form.Label>
+                  <Form.Control
+                    required
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group>
+                  <Form.Label>Slug (opcional)</Form.Label>
+                  <Form.Control
+                    value={form.slug}
+                    onChange={(e) => setForm({ ...form, slug: e.target.value })}
+                    placeholder={slugify(form.name)}
+                  />
+                  <small className="text-muted">Vazio → será “{slugify(form.name) || "slug"}”.</small>
+                </Form.Group>
+              </Col>
+            </Row>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowCreate(false)}>Cancelar</Button>
+            <Button type="submit">Guardar</Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
+
+      {/* MODAL: Editar (também no mesmo estilo) */}
+      <Modal show={showEdit} onHide={() => setShowEdit(false)} size="lg">
+        <Form onSubmit={handleUpdate}>
+          <Modal.Header closeButton>
+            <Modal.Title>Editar Categoria</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Row className="g-3">
+              <Col md={6}>
+                <Form.Group>
+                  <Form.Label>Nome</Form.Label>
+                  <Form.Control
+                    required
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group>
+                  <Form.Label>Slug</Form.Label>
+                  <Form.Control
+                    value={editForm.slug}
+                    onChange={(e) => setEditForm({ ...editForm, slug: e.target.value })}
+                    placeholder={slugify(editForm.name)}
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowEdit(false)}>Cancelar</Button>
+            <Button type="submit" variant="warning">Atualizar</Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
+
+      {/* MODAL: Confirm Delete (podes manter o teu ConfirmDialog se preferires) */}
+      <Modal show={confirm.show} onHide={() => setConfirm({ show: false, id: "", loading: false, msg: "" })}>
+        <Modal.Header closeButton>
+          <Modal.Title className="text-danger">Eliminar categoria</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>Queres mesmo eliminar esta categoria? Esta ação é irreversível.</p>
+          {confirm.msg && <div className="alert alert-warning mt-2">{confirm.msg}</div>}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="light" onClick={() => setConfirm({ show: false, id: "", loading: false, msg: "" })}>
+            Cancelar
+          </Button>
+          <Button variant="danger" disabled={confirm.loading} onClick={doDelete}>
+            {confirm.loading ? "A eliminar…" : "Eliminar"}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+    </div>
+  );
+}
+
+
 /* ------------------------------- DASHBOARD -------------------------------- */
 export default function Home() {
   const [section, setSection] = useState('products');
@@ -3041,6 +3283,7 @@ export default function Home() {
         <aside className="app-sidebar">
           <div className="mb-2 text-uppercase small text-muted px-1">Menu</div>
           <MenuItem id="products" icon={<FiInbox />} label="Produtos" />
+          <MenuItem id="categories" icon={<TbCategory2 />} label="Categorias" />
           <MenuItem id="featuredHome" icon={<FiHome />} label="Destaques Home (4)" />
           <MenuItem id="featuredList" icon={<FiList />} label="Destaques (Lista)" />
           <MenuItem id="topOverall" icon={<FiStar />} label="Top • Geral" />
@@ -3048,7 +3291,7 @@ export default function Home() {
           <MenuItem id="successCases" icon={<FiLayers />} label="Casos de Sucesso" />
           <MenuItem id="messages" icon={<FiMessageSquare />} label="Mensagens" />
           <MenuItem id="users" icon={<FiUsers />} label="Utilizadores" />
-          <MenuItem id="topLiked" icon={<FiThumbsUp />} label="Top Liked" />
+          <MenuItem id="topLiked" icon={<FiThumbsUp />} label="Top Liked" /> 
 
           <div className="mt-3 text-uppercase small text-muted px-1">Customização</div>
           <MenuItem id="customization" icon={<FiSliders />} label="Categorias & Produtos" />
@@ -3058,6 +3301,7 @@ export default function Home() {
         {/* CONTEÚDO */}
         <main className="app-content">
           {section === 'products' && <ProductsTab />}
+          {section === 'categories' && <CategoriesTab />}  
           {section === 'featuredHome' && <FeaturedHomeTab />}
           {section === 'featuredList' && <FeaturedListTab />}
           {section === 'topOverall' && <TopOverallTab />}
