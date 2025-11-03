@@ -9,6 +9,9 @@ import "react-datetime/css/react-datetime.css";
 import NavigationProvider from './contentApi/navigationProvider';
 import SideBarToggleProvider from './contentApi/sideBarToggleProvider';
 import ThemeCustomizer from './components/shared/ThemeCustomizer';
+import axios from 'axios';
+axios.defaults.withCredentials = true;
+
 
 const App = () => {
   return (
