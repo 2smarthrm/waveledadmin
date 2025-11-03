@@ -3,7 +3,9 @@ import axios from "axios";
 import React, { useState } from "react";
 import { Alert, Button, Spinner } from "react-bootstrap";
 import { FiFacebook, FiGithub, FiTwitter } from "react-icons/fi"; 
-const API_BASE = "http://localhost:4000";
+const isBrowser = typeof window !== "undefined";
+const protocol = isBrowser && window.location.protocol === "https:" ? "https" : "http";
+const API_BASE = protocol === "https"  ?  'https://waveledserver.vercel.app' : "http://localhost:4000";
 
 const LoginForm = ({ onLoggedIn }) => {
   const [email, setEmail] = useState("");
